@@ -3,6 +3,8 @@
 
 #import <Foundation/Foundation.h>
 
+NS_ASSUME_NONNULL_BEGIN
+
 @class ValhallaWrapper;
 
 NS_SWIFT_NAME(ValhallaObjcHTTPResponse)
@@ -37,14 +39,17 @@ NS_SWIFT_NAME(ValhallaObjcHTTPClient)
     void* _actor;
 }
 
-- (instancetype)initWithConfigPath:(NSString*)config_path error:(__autoreleasing NSError **)error;
+- (nullable instancetype)initWithConfigPath:(NSString*)config_path
+                                      error:(NSError* _Nullable __autoreleasing* _Nullable)error;
 
-- (instancetype)initWithConfigPath:(NSString*)config_path
-                        httpClient:(id<ValhallaMobileHTTPClient>)httpClient
-                             error:(__autoreleasing NSError **)error;
+- (nullable instancetype)initWithConfigPath:(NSString*)config_path
+                                httpClient:(id<ValhallaMobileHTTPClient>)httpClient
+                                     error:(NSError* _Nullable __autoreleasing* _Nullable)error;
 
 - (NSString*)route:(NSString*)request;
 
 @end
+
+NS_ASSUME_NONNULL_END
 
 #endif /* ValhallaWrapperHeader_h */

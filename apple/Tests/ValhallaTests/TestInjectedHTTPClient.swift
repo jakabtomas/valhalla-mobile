@@ -53,7 +53,7 @@ final class TestInjectedHTTPClient: XCTestCase {
                 RoutingWaypoint(lat: 42.5086, lon: 1.5394)
             ],
             costing: .auto,
-            directionsOptions: DirectionsOptions(units: .mi)
+            units: .mi
         )
 
         let response = try valhalla.route(request: request)
