@@ -1,6 +1,16 @@
 package com.valhalla.valhalla
 
-data class ErrorResponse(val code: Int, val message: String) {
+import com.squareup.moshi.Json
+
+data class ErrorResponse(
+    val code: Int,
+    val message: String,
+    @param:Json(name = "error_type") val errorType: String? = null,
+    val operation: String? = null,
+    @param:Json(name = "failure_kind") val failureKind: String? = null,
+    @param:Json(name = "http_code") val httpCode: Long? = null,
+    val detail: String? = null
+) {
   override fun toString(): String {
     return "ValhallaError(code=$code, $message)"
   }
@@ -18,6 +28,9 @@ sealed class ValhallaException(message: String? = null, cause: Throwable? = null
    * @constructor TODO
    */
   class Internal(response: ErrorResponse) : ValhallaException(response.toString(), null)
+
+  /** A typed graph tile provider failure, including offline missing coverage. */
+  class TileFetch(val response: ErrorResponse) : ValhallaException(response.toString(), null)
 
   class InvalidError : ValhallaException("Invalid error response data")
 

@@ -14,7 +14,8 @@ extern "C" {
 JNIEXPORT jstring JNICALL Java_com_valhalla_valhalla_ValhallaKotlin_route(JNIEnv *env,
                                                 jobject thiz,
                                                 jstring jRequest,
-                                                jstring jConfigPath);
+                                                jstring jConfigPath,
+                                                jobject jHttpClient);
 
 #ifdef __cplusplus
 }

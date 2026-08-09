@@ -47,6 +47,25 @@ move_android_so() {
     fi
 }
 
+apply_valhalla_patches() {
+    local patch_files=(
+        "$(pwd)/patches/valhalla-inspect-decompressed-tile-header.patch"
+        "$(pwd)/patches/valhalla-streaming-shortcut-null-safety.patch"
+    )
+    local patch_file
+    for patch_file in "${patch_files[@]}"; do
+        if git -C src/valhalla apply --reverse --check "$patch_file" >/dev/null 2>&1; then
+            continue
+        fi
+        if git -C src/valhalla apply --check "$patch_file"; then
+            git -C src/valhalla apply "$patch_file"
+            continue
+        fi
+        echo "Valhalla patch cannot be applied cleanly: $patch_file"
+        exit 1
+    done
+}
+
 if [ -d "$(pwd)/vcpkg" ]; then
   export VCPKG_ROOT="$(pwd)/vcpkg"
 else
@@ -61,6 +80,9 @@ fi
 platform=""
 arch=""
 clean=false
+clean_all=false
+
+apply_valhalla_patches
 
 while [[ $# -gt 0 ]]; do
     case $1 in
@@ -87,20 +109,6 @@ while [[ $# -gt 0 ]]; do
     esac
     shift
 done
-
-# if the first argument is clean, then clean the build directory
-if [ "$2" == "clean" ]; then
-    if [ "$1" == "ios" ]; then
-        echo "Cleaning the iOS build directory..."
-        rm -rf build/apple
-    elif [ "$1" == "android" ]; then
-        echo "Cleaning the Android build directory..."
-        rm -rf build/android
-    else
-        echo "Cleaning the build directory..."
-        rm -rf build
-    fi
-fi
 
 # Handle cleaning
 if $clean_all; then

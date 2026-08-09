@@ -1,6 +1,9 @@
 package com.valhalla.valhalla
 
-internal interface ValhallaActorProviding {
+import com.valhalla.valhalla.http.UrlConnectionValhallaHttpClient
+import com.valhalla.valhalla.http.ValhallaHttpClient
+
+interface ValhallaActorProviding {
   fun route(request: String): String
 }
 
@@ -10,7 +13,12 @@ internal interface ValhallaActorProviding {
  *
  * @property configPath
  */
-internal class ValhallaActor(private val configPath: String) : ValhallaActorProviding {
+class ValhallaActor
+@JvmOverloads
+constructor(
+    private val configPath: String,
+    private val httpClient: ValhallaHttpClient = UrlConnectionValhallaHttpClient()
+) : ValhallaActorProviding {
   private val valhallaKotlin = ValhallaKotlin()
 
   /**
@@ -21,6 +29,6 @@ internal class ValhallaActor(private val configPath: String) : ValhallaActorProv
    * @return
    */
   override fun route(request: String): String {
-    return valhallaKotlin.route(request, configPath)
+    return valhallaKotlin.route(request, configPath, httpClient)
   }
 }
