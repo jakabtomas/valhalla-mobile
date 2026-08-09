@@ -1,0 +1,26 @@
+diff --git a/src/baldr/graphreader.cc b/src/baldr/graphreader.cc
+--- a/src/baldr/graphreader.cc
++++ b/src/baldr/graphreader.cc
+@@ -839,5 +839,13 @@ GraphId GraphReader::GetShortcut(const GraphId& id) {
+   // If this edge is a shortcut return this edge Id
+   graph_tile_ptr tile = GetGraphTile(id);
++  // A streaming graph provider can expose a deliberately incomplete active
++  // view while it gathers the next batch of requested tiles. Missing shortcut
++  // dependencies must behave as "no shortcut found"; dereferencing the absent
++  // tile here crashes the host application before the provider can expand the
++  // graph and retry.
++  if (tile == nullptr) {
++    return {};
++  }
+   const DirectedEdge* directededge = tile->directededge(id);
+   if (directededge->is_shortcut()) {
+     return id;
+@@ -873,5 +881,8 @@ GraphId GraphReader::GetShortcut(const GraphId& id) {
+     GraphId endnode = cont_de->endnode();
+     if (cont_de->leaves_tile()) {
+       tile = GetGraphTile(endnode.tile_base());
++      if (tile == nullptr) {
++        return {};
++      }
+     }
+     node = tile->node(endnode);

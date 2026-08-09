@@ -1,15 +1,15 @@
 # Valhalla Mobile
 
 [![Valhalla](https://img.shields.io/badge/Valhalla-3.6.3-blue)](https://github.com/valhalla/valhalla/releases/tag/3.6.3)
-[![](https://img.shields.io/endpoint?url=https%3A%2F%2Fswiftpackageindex.com%2Fapi%2Fpackages%2FRallista%2Fvalhalla-mobile%2Fbadge%3Ftype%3Dswift-versions)](https://swiftpackageindex.com/Rallista/valhalla-mobile)
-[![](https://img.shields.io/endpoint?url=https%3A%2F%2Fswiftpackageindex.com%2Fapi%2Fpackages%2FRallista%2Fvalhalla-mobile%2Fbadge%3Ftype%3Dplatforms)](https://swiftpackageindex.com/Rallista/valhalla-mobile)
-[![Maven Central](https://img.shields.io/maven-central/v/io.github.rallista/valhalla-mobile)](https://central.sonatype.com/artifact/io.github.rallista/valhalla-mobile)
-[![Kotlin Docs](https://img.shields.io/badge/Kotlin%20Dokka-purple?logo=kotlin)](https://rallista.github.io/valhalla-mobile/)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE.md)
 
-This project builds [valhalla](https://github.com/valhalla/valhalla) as a static iOS or shared Android library.
+This project builds [Valhalla](https://github.com/valhalla/valhalla) as a static iOS or
+shared Android library.
 
-It currently only exposes the route function for the primary purpose of generating turn by turn navigation routes
-using a downloaded pre-parsed valhalla tileset.
+It exposes route generation over local graph tiles and over application-provided graph
+transports. A consumer can inject memory, disk, offline-package, HTTP, authenticated,
+or multi-tier cache implementations without placing application configuration in this
+library.
 
 We welcome contributions to expand the functionality of this library. See our [CONTRIBUTING.md](CONTRIBUTING.md)
 for more information.
@@ -20,29 +20,37 @@ to reach out on the OpenStreetMap Slack (osmus.slack.com) under the [#valhalla-m
 
 ### Android
 
-Using a `libs.versions.toml` with a `build.gradle.kts`
+Release AARs are public GitHub release assets. Add the artifact-only Ivy repository in
+`settings.gradle.kts`:
 
-```toml
-[verisons]
-valhallaMobile = "0.1.0"
-[libraries]
-valhalla-mobile = { group = "io.github.rallista", name = "valhalla-mobile", version.ref = "valhallaMobile" }
+```kotlin
+dependencyResolutionManagement {
+    repositories {
+        google()
+        mavenCentral()
+        ivy {
+            name = "ValhallaMobileReleases"
+            url = uri(
+                "https://github.com/jakabtomas/valhalla-mobile/releases/download"
+            )
+            patternLayout {
+                artifact("[revision]/[artifact]-[revision].[ext]")
+            }
+            metadataSources { artifact() }
+            content {
+                includeModule("io.github.jakabtomas", "valhalla-mobile")
+            }
+        }
+    }
+}
 ```
 
-```kts
-implementation(libs.valhalla.mobile)
-```
+Then add the immutable release:
 
-Using a standard `build.gradle.kts`
-
-```kts
-implementation("io.github.rallista:valhalla-mobile:0.1.0")
-```
-
-Using a standard `build.gradle`
-
-```
-implementation 'io.github.rallista:valhalla-mobile:0.1.0'
+```kotlin
+implementation("io.github.jakabtomas:valhalla-mobile:0.6.0@aar")
+implementation("io.github.rallista:valhalla-models:0.2.0")
+implementation("io.github.rallista:valhalla-models-config:0.2.0")
 ```
 
 ### iOS
@@ -52,7 +60,10 @@ In a swift package:
 ```swift
 let package = Package(
     dependencies: [
-        .package(url: "https://github.com/rallista/valhalla-mobile.git", from: "0.1.0"),
+        .package(
+            url: "https://github.com/jakabtomas/valhalla-mobile.git",
+            exact: "0.6.0"
+        ),
     ],
     targets: [
         .target(
@@ -64,7 +75,28 @@ let package = Package(
 )
 ```
 
-## Manually Building Valhalla C++
+## Injecting graph transport
+
+The library owns the Valhalla bridge, not an application's network or storage policy.
+Android applications implement `ValhallaHttpClient`; Apple applications implement
+`ValhallaHTTPClient`. Both interfaces receive synchronous `GET` and `HEAD` operations,
+including exact byte ranges used by indexed tar archives.
+
+```kotlin
+val engine = ValhallaActor(configPath, applicationTileProvider)
+val response = engine.route(requestJson)
+```
+
+```swift
+let engine = try Valhalla(config, httpClient: applicationTileProvider)
+let response = engine.route(rawRequest: requestJSON)
+```
+
+Provider URLs and Valhalla configuration are consumer data. The library contains no
+service endpoint, credentials, cache policy, region catalog, or application-specific
+fallback behavior.
+
+## Manually building Valhalla C++
 
 Fetching submodules
 
@@ -80,7 +112,7 @@ git clone https://github.com/microsoft/vcpkg && git -C vcpkg checkout 2025.12.12
 export VCPKG_ROOT=`pwd`/vcpkg
 ```
 
-### iOS Swift Package
+### iOS Swift package
 
 On iOS, you must pre-build the xcframework using the command:
 
@@ -93,17 +125,28 @@ On iOS, you must pre-build the xcframework using the command:
 **Prerequisites:** See [development.md](docs/development.md), specifically 
 setting up NDK `29.0.14206865` to match CI.
 
-The project's build.gradle.kts includes a build task that automatically runs the script below selectively per architecture.
-It's also possible to run this manually:
+Build every Android architecture explicitly with either command:
 
 ```sh
 ./build.sh android clean
+# or
+cd android && ./gradlew buildValhallaAll
 ```
 
-## Valhalla Fork
+Native compilation is deliberately not attached to every Gradle `preBuild` invocation;
+unit tests and source-only checks therefore stay fast and deterministic.
 
-This project uses our fork of valhalla at <https://github.com/Rallista/valhalla> as a submodule. If a feature is missing, please
-open an issue or PR on that repository to upgrade it to valhalla's latest version.
+## Valhalla compatibility patches
+
+The repository pins the official Valhalla submodule. Small compatibility changes live as
+reviewable files under `patches/` and are applied idempotently by `build.sh`; the
+submodule itself remains clean.
+
+Run the generic-library boundary check before committing:
+
+```sh
+./scripts/check_genericity.sh
+```
 
 ## References
 

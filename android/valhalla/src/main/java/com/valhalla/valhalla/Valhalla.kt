@@ -8,6 +8,8 @@ import com.valhalla.api.models.RouteRequest
 import com.valhalla.api.models.RouteResponse
 import com.valhalla.config.models.ValhallaConfig
 import com.valhalla.valhalla.config.ValhallaConfigManager
+import com.valhalla.valhalla.http.UrlConnectionValhallaHttpClient
+import com.valhalla.valhalla.http.ValhallaHttpClient
 
 /**
  * Main entry point for the Valhalla routing engine on Android.
@@ -30,14 +32,15 @@ class Valhalla(
     context: Context,
     config: ValhallaConfig,
     valhallaConfigManager: ValhallaConfigManager = ValhallaConfigManager(context),
-    private val moshi: Moshi = Moshi.Builder().add(KotlinJsonAdapterFactory()).build()
+    private val moshi: Moshi = Moshi.Builder().add(KotlinJsonAdapterFactory()).build(),
+    httpClient: ValhallaHttpClient = UrlConnectionValhallaHttpClient()
 ) {
 
   private val valhallaActor: ValhallaActorProviding
 
   init {
     valhallaConfigManager.writeConfig(config)
-    valhallaActor = ValhallaActor(valhallaConfigManager.getAbsolutePath())
+    valhallaActor = ValhallaActor(valhallaConfigManager.getAbsolutePath(), httpClient)
   }
 
   /**
@@ -66,7 +69,12 @@ class Valhalla(
     // If the response contains routes, it's a valid OSRM response.
     if (rawResponse.contains("code") and !rawResponse.contains("routes")) {
       val error = moshi.adapter(ErrorResponse::class.java).fromJson(rawResponse)
-      error?.let { throw ValhallaException.Internal(it) }
+      error?.let {
+        if (it.errorType == "tile_fetch") {
+          throw ValhallaException.TileFetch(it)
+        }
+        throw ValhallaException.Internal(it)
+      }
       throw ValhallaException.InvalidError()
     }
 

@@ -4,6 +4,9 @@
 #include <valhalla/loki/worker.h>
 #include "valhalla_actor.h"
 
+#include <stdexcept>
+#include <utility>
+
 class TileGetterWrapper : public valhalla::baldr::tile_getter_t {
 public:
   /**
@@ -12,7 +15,8 @@ public:
    * @param gzipped  whether to request for gzip compressed data
    * @param user_pw  the "user:pwd" for HTTP basic auth
    */
-  TileGetterWrapper(ValhallaMobileHttpClient* http_client, bool is_gzipped): http_client(http_client), is_gzipped(is_gzipped) {
+  TileGetterWrapper(std::unique_ptr<ValhallaMobileHttpClient> http_client, bool is_gzipped)
+      : is_gzipped(is_gzipped), http_client(std::move(http_client)) {
   }
 
   GET_response_t get(const std::string& url,
@@ -41,17 +45,15 @@ public:
     return is_gzipped;
   }
 
-  ~TileGetterWrapper() {
-    delete http_client;
-  };
-
 private:
   bool is_gzipped;
-  ValhallaMobileHttpClient* http_client;
+  std::unique_ptr<ValhallaMobileHttpClient> http_client;
 };
 
 
-ValhallaActor::ValhallaActor(const std::string& config_path, ValhallaMobileHttpClient* http_client) {
+ValhallaActor::ValhallaActor(
+    const std::string& config_path,
+    std::unique_ptr<ValhallaMobileHttpClient> http_client) {
 std::string config_file(config_path);
     
     // Set up the config object
@@ -59,26 +61,16 @@ std::string config_file(config_path);
     rapidjson::read_json(config_file, config);
 
     auto mjolnir_config = config.get_child("mjolnir");
-    // Only attach the HTTP tile-getter when a tile_url is configured. Passing a
-    // getter unconditionally forces GraphReader into fetch mode, so in pure
-    // loose-tile mode (tile_dir set, tile_url empty) a referenced-but-missing
-    // tile attempts a remote fetch against an empty URL and throws
-    // (std::exception: basic_string) instead of returning nullptr. With a null
-    // getter, GraphReader::GetGraphTile returns nullptr for a missing loose tile
-    // (`if (!tile_getter_) return nullptr;`) — matching upstream Valhalla, so the
-    // router routes around the gap. This is what offline tile_dir consumers
-    // expect (e.g. region packs that don't bundle the full tile hierarchy).
     std::unique_ptr<TileGetterWrapper> tile_getter;
     if (!mjolnir_config.get<std::string>("tile_url", std::string()).empty()) {
+      if (!http_client) {
+        throw std::invalid_argument("A tile URL requires an HTTP client");
+      }
       tile_getter = std::make_unique<TileGetterWrapper>(
-          http_client, mjolnir_config.get<bool>("tile_url_gz", false));
-    } else if (http_client) {
-      // Not handed to a getter (which would own it) — release it so it doesn't leak.
-      delete http_client;
+          std::move(http_client), mjolnir_config.get<bool>("tile_url_gz", false));
     }
     graph_reader = std::make_unique<valhalla::baldr::GraphReader>(
-      mjolnir_config, std::move(tile_getter)
-    );
+      mjolnir_config, std::move(tile_getter));
     // Setup the actor
     actor = std::make_unique<valhalla::tyr::actor_t>(config, *graph_reader, true);
 }

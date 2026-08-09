@@ -3,117 +3,174 @@ name: Release
 on:
   workflow_dispatch:
     inputs:
-      bump_version_scheme:
-        type: choice
-        description: "Release"
+      version:
+        description: Semantic version to publish
         required: true
-        default: "patch"
-        options:
-          - "patch"
-          - "minor"
-          - "major"
+        default: 0.6.0
+        type: string
+
+concurrency:
+  group: valhalla-mobile-release
+  cancel-in-progress: false
+
+env:
+  ANDROID_NDK_VERSION: 29.0.14206865
+  VCPKG_VERSION: 2025.12.12
 
 jobs:
-  build-ios:
-    runs-on: macos-15
-    strategy:
-      matrix:
-        arch: ["arm64-ios", "arm64-ios-simulator", "x64-ios-simulator"]
-
+  validate:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
-      - name: Checkout Valhalla
+      - name: Check out sources
         uses: actions/checkout@v4
         with:
-          submodules: "recursive"
+          fetch-depth: 0
+          submodules: recursive
 
-      - uses: maxim-lobanov/setup-xcode@v1
-        with:
-          xcode-version: "16.4.0"
-
-      - name: Setup VCPKG
+      - name: Validate release input and repository boundary
+        env:
+          RELEASE_VERSION: ${{ inputs.version }}
         run: |
-          git clone https://github.com/microsoft/vcpkg && git -C vcpkg checkout 2025.10.17
-          ./vcpkg/bootstrap-vcpkg.sh
-          export VCPKG_ROOT=`pwd`/vcpkg
+          if [[ ! "$RELEASE_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+([+-][0-9A-Za-z.-]+)?$ ]]; then
+            echo "Invalid semantic version: $RELEASE_VERSION"
+            exit 1
+          fi
+          if git rev-parse "$RELEASE_VERSION" >/dev/null 2>&1; then
+            echo "Version already exists: $RELEASE_VERSION"
+            exit 1
+          fi
+          ./scripts/check_genericity.sh
 
-      - name: Build for iOS & iOS Simulator
-        run: ./build.sh --ios ${{ matrix.arch }}
+  build-ios:
+    needs: validate
+    runs-on: macos-26
+    strategy:
+      fail-fast: false
+      matrix:
+        architecture: [arm64-ios, arm64-ios-simulator, x64-ios-simulator]
+    permissions:
+      contents: read
+    steps:
+      - name: Check out sources
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
 
-      - name: Upload build artifacts
+      - name: Select Xcode
+        uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: 26.5
+
+      - name: Install pinned vcpkg
+        run: |
+          git clone --branch "$VCPKG_VERSION" https://github.com/microsoft/vcpkg
+          ./vcpkg/bootstrap-vcpkg.sh -disableMetrics
+
+      - name: Build native Apple library
+        run: ./build.sh --ios "${{ matrix.architecture }}"
+
+      - name: Upload Apple slice
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ matrix.arch }}
-          path: |
-            build/apple/${{ matrix.arch }}/install
+          name: ios-${{ matrix.architecture }}
+          path: build/apple/${{ matrix.architecture }}/install
+          if-no-files-found: error
+          retention-days: 2
 
-  create-xcframework-release:
+      - name: Build third-party license bundle
+        if: matrix.architecture == 'arm64-ios'
+        run: |
+          ./scripts/create_license_bundle.sh \
+            build/licenses \
+            build/apple/arm64-ios/vcpkg_installed
+          ditto -c -k --keepParent build/licenses THIRD_PARTY_LICENSES.zip
+
+      - name: Upload third-party licenses
+        if: matrix.architecture == 'arm64-ios'
+        uses: actions/upload-artifact@v4
+        with:
+          name: third-party-licenses
+          path: THIRD_PARTY_LICENSES.zip
+          if-no-files-found: error
+          retention-days: 2
+
+  package-ios:
     needs: build-ios
-    runs-on: macos-15
+    runs-on: macos-26
+    permissions:
+      contents: read
     steps:
-      - name: Checkout Valhalla
+      - name: Check out sources
         uses: actions/checkout@v4
 
-      - uses: maxim-lobanov/setup-xcode@v1
-        with:
-          xcode-version: "16.4.0"
-
-      - name: Download all artifacts
+      - name: Download device slice
         uses: actions/download-artifact@v4
         with:
-          path: build/apple
+          name: ios-arm64-ios
+          path: build/apple/arm64-ios/install
 
-      - name: Move artifacts to correct locations
-        run: |
-          for arch in arm64-ios arm64-ios-simulator x64-ios-simulator; do
-            mkdir -p build/apple/$arch/install
-            mv build/apple/$arch/* build/apple/$arch/install/ || true
-          done
+      - name: Download arm64 simulator slice
+        uses: actions/download-artifact@v4
+        with:
+          name: ios-arm64-ios-simulator
+          path: build/apple/arm64-ios-simulator/install
+
+      - name: Download x64 simulator slice
+        uses: actions/download-artifact@v4
+        with:
+          name: ios-x64-ios-simulator
+          path: build/apple/x64-ios-simulator/install
 
       - name: Create XCFramework
         run: |
           ./scripts/create_xcframework.sh
+          ditto -c -k --sequesterRsrc --keepParent \
+            build/apple/valhalla-wrapper.xcframework \
+            valhalla-wrapper.xcframework.zip
+          swift package compute-checksum valhalla-wrapper.xcframework.zip
 
-      - name: Zip the xcframework
-        run: |
-          cd build/apple
-          zip -r valhalla-wrapper.xcframework.zip valhalla-wrapper.xcframework
-          mv valhalla-wrapper.xcframework.zip ../../
-          cd ../../
-
-      - name: Upload xcframework zip output
+      - name: Upload XCFramework
         uses: actions/upload-artifact@v4
         with:
-          name: valhalla-wrapper.xcframework.zip
-          path: |
-            valhalla-wrapper.xcframework.zip
+          name: apple-release
+          path: valhalla-wrapper.xcframework.zip
+          if-no-files-found: error
+          retention-days: 2
 
   build-android:
+    needs: validate
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        architecture: [arm64-v8a, armeabi-v7a, x86, x86_64]
     permissions:
       contents: read
       packages: read
-    strategy:
-      matrix:
-        arch: ["arm64-v8a", "armeabi-v7a", "x86_64", "x86"]
-
     steps:
-      - name: Checkout Valhalla
+      - name: Check out sources
         uses: actions/checkout@v4
         with:
-          submodules: "recursive"
+          submodules: recursive
 
-      - name: Setup VCPKG
+      - name: Install pinned vcpkg
         run: |
-          git clone https://github.com/microsoft/vcpkg && git -C vcpkg checkout 2024.09.23
-          ./vcpkg/bootstrap-vcpkg.sh
-          export VCPKG_ROOT=`pwd`/vcpkg
+          git clone --branch "$VCPKG_VERSION" https://github.com/microsoft/vcpkg
+          ./vcpkg/bootstrap-vcpkg.sh -disableMetrics
 
-      - name: Setup Android NDK
+      - name: Set up Android NDK
         id: setup-ndk
         uses: nttld/setup-ndk@v1
         with:
           ndk-version: r29
           add-to-path: false
+
+      - name: Verify Android NDK revision
+        env:
+          ANDROID_NDK_HOME: ${{ steps.setup-ndk.outputs.ndk-path }}
+        run: grep -Fx "Pkg.Revision = $ANDROID_NDK_VERSION" "$ANDROID_NDK_HOME/source.properties"
 
       - name: set up JDK 21
         uses: actions/setup-java@v4
@@ -122,169 +179,189 @@ jobs:
           distribution: "temurin"
           cache: gradle
 
-      - name: Grant execute permission for gradlew
-        run: chmod +x gradlew
-        working-directory: android
-
-      - name: Build with Gradle
+      - name: Build native Android library
         env:
-          GITHUB_ACTOR: ${{ github.actor }}
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           ANDROID_NDK_HOME: ${{ steps.setup-ndk.outputs.ndk-path }}
-        run: ./gradlew buildValhallaFor-${{ matrix.arch }}
-        working-directory: android
+        run: ./build.sh --android "${{ matrix.architecture }}"
 
-      - name: Upload JNI Lib
+      - name: Upload Android native library
         uses: actions/upload-artifact@v4
         with:
-          name: libvalhalla-${{ matrix.arch }}
-          path: android/valhalla/src/main/jniLibs/${{ matrix.arch }}/libvalhalla-wrapper.so
-          retention-days: 1
+          name: android-${{ matrix.architecture }}
+          path: android/valhalla/src/main/jniLibs/${{ matrix.architecture }}/libvalhalla-wrapper.so
+          if-no-files-found: error
+          retention-days: 2
 
-  combine-android:
+  package-android:
     needs: build-android
-    runs-on: ubuntu-latest
-    steps:
-      - name: Download all artifacts
-        uses: actions/download-artifact@v4
-        with:
-          path: jniLibs
-
-      - name: Organize and zip artifacts
-        run: |
-          mkdir -p android/valhalla/src/main/jniLibs
-          for arch in arm64-v8a armeabi-v7a x86 x86_64; do
-            mkdir -p android/valhalla/src/main/jniLibs/$arch
-            if [ -f jniLibs/libvalhalla-$arch/libvalhalla-wrapper.so ]; then
-              cp jniLibs/libvalhalla-$arch/libvalhalla-wrapper.so android/valhalla/src/main/jniLibs/$arch/
-            fi
-          done
-          zip -r valhalla-jniLibs.zip android
-
-      - name: Upload zipped JNI Libs
-        uses: actions/upload-artifact@v4
-        with:
-          name: valhalla-jniLibs
-          path: valhalla-jniLibs.zip
-          retention-days: 1
-
-  draft-release:
-    runs-on: macos-15
-    needs: create-xcframework-release
-    outputs:
-      version: ${{ steps.version.outputs.version }}
-      release_id: ${{ steps.release.outputs.id }}
-    env:
-      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-    permissions:
-      # Give the default GITHUB_TOKEN write permission to commit and push the
-      # added or changed files to the repository.
-      contents: write
-
-    steps:
-      - name: Checkout Valhalla
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-          token: ${{ secrets.PAT }}
-
-      - name: Configure Git
-        run: |
-          git config user.name github-actions
-          git config user.email github-actions@github.com
-
-      - name: Download the xcframework artifact from the build-and-test
-        uses: actions/download-artifact@v4
-        with:
-          name: valhalla-wrapper.xcframework.zip
-
-      - name: Get version tag
-        id: version
-        run: ./scripts/version_bump.sh ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && 'patch' || inputs.bump_version_scheme }}
-
-      - uses: softprops/action-gh-release@v1
-        id: release
-        with:
-          draft: true
-          generate_release_notes: true
-          tag_name: ${{ steps.version.outputs.version }}
-          files: "valhalla-wrapper.xcframework.zip"
-
-      - name: Write the xcframework to Package.swift
-        run: ./scripts/write_xcframework_spm.sh ${{ steps.version.outputs.version }}
-
-      # https://github.com/marketplace/actions/git-auto-commit#push-to-protected-branches
-      - uses: stefanzweifel/git-auto-commit-action@v5
-        with:
-          commit_message: "Publish Package.swift and bump version to ${{ steps.version.outputs.version }} [skip ci]"
-          tagging_message: "${{ steps.version.outputs.version }}"
-          push_options: --force
-
-      - name: Output version
-        run: |
-          echo "version=${{ steps.version.outputs.version }}" >> "$GITHUB_OUTPUT"
-          echo "release_id=${{ steps.release.outputs.id }}" >> "$GITHUB_OUTPUT"
-
-  publish-release:
-    runs-on: ubuntu-latest
-    needs: draft-release
-    steps:
-      - uses: eregon/publish-release@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          release_id: ${{ needs.draft-release.outputs.release_id }}
-
-  publish-android:
-    needs: [combine-android, publish-release]
     runs-on: ubuntu-latest
     permissions:
       contents: read
       packages: read
-
     steps:
-      - uses: actions/checkout@v4
+      - name: Check out sources
+        uses: actions/checkout@v4
+
+      - name: Download arm64 library
+        uses: actions/download-artifact@v4
+        with:
+          name: android-arm64-v8a
+          path: android/valhalla/src/main/jniLibs/arm64-v8a
+
+      - name: Download armv7 library
+        uses: actions/download-artifact@v4
+        with:
+          name: android-armeabi-v7a
+          path: android/valhalla/src/main/jniLibs/armeabi-v7a
+
+      - name: Download x86 library
+        uses: actions/download-artifact@v4
+        with:
+          name: android-x86
+          path: android/valhalla/src/main/jniLibs/x86
+
+      - name: Download x86_64 library
+        uses: actions/download-artifact@v4
+        with:
+          name: android-x86_64
+          path: android/valhalla/src/main/jniLibs/x86_64
+
+      - name: Set up Android NDK
+        id: setup-ndk
+        uses: nttld/setup-ndk@v1
+        with:
+          ndk-version: r29
+          add-to-path: false
+
+      - name: Verify Android NDK revision
+        env:
+          ANDROID_NDK_HOME: ${{ steps.setup-ndk.outputs.ndk-path }}
+        run: grep -Fx "Pkg.Revision = $ANDROID_NDK_VERSION" "$ANDROID_NDK_HOME/source.properties"
+
+      - name: Strip release native libraries
+        env:
+          ANDROID_NDK_HOME: ${{ steps.setup-ndk.outputs.ndk-path }}
+        run: |
+          strip_tool="$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-strip"
+          test -x "$strip_tool"
+          find android/valhalla/src/main/jniLibs \
+            -type f -name 'libvalhalla-wrapper.so' -print0 |
+            xargs -0 -n1 "$strip_tool" --strip-unneeded
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          java-version: 21
+          distribution: temurin
+          cache: gradle
+
+      - name: Assemble release AAR
+        working-directory: android
+        env:
+          RELEASE_VERSION: ${{ inputs.version }}
+        run: |
+          printf '%s\n' "$RELEASE_VERSION" > ../version.txt
+          ./gradlew :valhalla:assembleRelease ktfmtCheck test --no-daemon
+          cp valhalla/build/outputs/aar/valhalla-release.aar \
+            "../valhalla-mobile-${RELEASE_VERSION}.aar"
+
+      - name: Verify packaged ABIs
+        env:
+          RELEASE_VERSION: ${{ inputs.version }}
+        run: |
+          archive="valhalla-mobile-${RELEASE_VERSION}.aar"
+          for architecture in arm64-v8a armeabi-v7a x86 x86_64; do
+            entry="jni/${architecture}/libvalhalla-wrapper.so"
+            unzip -Z1 "$archive" | grep -Fx "$entry"
+            size="$(unzip -l "$archive" "$entry" | awk -v entry="$entry" '$4 == entry { print $1 }')"
+            test -n "$size"
+            test "$size" -lt $((50 * 1024 * 1024))
+          done
+          shasum -a 256 "$archive"
+
+      - name: Upload Android release
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-release
+          path: valhalla-mobile-${{ inputs.version }}.aar
+          if-no-files-found: error
+          retention-days: 2
+
+  publish:
+    needs: [package-ios, package-android, build-ios]
+    runs-on: macos-26
+    permissions:
+      contents: write
+      id-token: write
+      attestations: write
+    steps:
+      - name: Check out release branch
+        uses: actions/checkout@v4
         with:
           ref: main
           fetch-depth: 0
+          submodules: recursive
 
-      # TODO: Remove this once successful.
-      - name: Verify version
-        run: cat version.txt
-
-      - name: Download JNI Libs
+      - name: Download Apple release
         uses: actions/download-artifact@v4
         with:
-          name: valhalla-jniLibs
-          path: .
+          name: apple-release
+          path: release-assets
 
-      - name: Unzip JNI Libs
-        run: unzip valhalla-jniLibs.zip
-
-      - name: set up JDK 21
-        uses: actions/setup-java@v4
+      - name: Download Android release
+        uses: actions/download-artifact@v4
         with:
-          java-version: "21"
-          distribution: "temurin"
-          cache: gradle
+          name: android-release
+          path: release-assets
 
-      - name: Setup Android NDK
-        id: setup-ndk
-        uses: nttld/setup-ndk@v1
+      - name: Download third-party licenses
+        uses: actions/download-artifact@v4
         with:
-          ndk-version: r29
-          add-to-path: false
+          name: third-party-licenses
+          path: release-assets
 
-      - name: Grant execute permission for gradlew
-        run: chmod +x gradlew
-        working-directory: android
-
-      - name: Publish to Maven Central
+      - name: Prepare immutable release manifest
         env:
-          ORG_GRADLE_PROJECT_mavenCentralUsername: ${{ secrets.MAVEN_CENTRAL_USERNAME }}
-          ORG_GRADLE_PROJECT_mavenCentralPassword: ${{ secrets.MAVEN_CENTRAL_PASSWORD }}
-          ORG_GRADLE_PROJECT_signingInMemoryKey: ${{ secrets.MAVEN_GPG_PRIVATE_KEY }}
-          ORG_GRADLE_PROJECT_signingInMemoryKeyPassword: ${{ secrets.MAVEN_GPG_PASSPHRASE }}
-          ANDROID_NDK_HOME: ${{ steps.setup-ndk.outputs.ndk-path }}
-        run: ./gradlew publishAndReleaseToMavenCentral --no-configuration-cache
-        working-directory: android
+          RELEASE_VERSION: ${{ inputs.version }}
+        run: |
+          ./scripts/write_xcframework_spm.sh \
+            "$RELEASE_VERSION" \
+            release-assets/valhalla-wrapper.xcframework.zip
+          ./scripts/check_genericity.sh
+          git diff --check
+
+      - name: Commit and tag release manifest
+        env:
+          RELEASE_VERSION: ${{ inputs.version }}
+        run: |
+          git config user.name github-actions
+          git config user.email github-actions@github.com
+          git add Package.swift version.txt
+          git commit -m "Release ${RELEASE_VERSION}"
+          git tag -a "$RELEASE_VERSION" -m "Valhalla Mobile ${RELEASE_VERSION}"
+          git push origin HEAD:main
+          git push origin "$RELEASE_VERSION"
+
+      - name: Attest Apple artifact
+        uses: actions/attest-build-provenance@v3
+        with:
+          subject-path: release-assets/valhalla-wrapper.xcframework.zip
+
+      - name: Attest Android artifact
+        uses: actions/attest-build-provenance@v3
+        with:
+          subject-path: release-assets/valhalla-mobile-${{ inputs.version }}.aar
+
+      - name: Publish GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_VERSION: ${{ inputs.version }}
+        run: |
+          gh release create "$RELEASE_VERSION" \
+            release-assets/valhalla-wrapper.xcframework.zip \
+            "release-assets/valhalla-mobile-${RELEASE_VERSION}.aar" \
+            release-assets/THIRD_PARTY_LICENSES.zip \
+            --repo "$GITHUB_REPOSITORY" \
+            --title "Valhalla Mobile ${RELEASE_VERSION}" \
+            --generate-notes \
+            --verify-tag

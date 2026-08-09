@@ -1,7 +1,8 @@
 // swift-tools-version:5.8
 import PackageDescription
 
-// Use the local binary if true
+// Source development opts into the local binary explicitly. Consumers always
+// resolve the immutable release asset recorded below.
 let useLocalBinary = Context.environment["VALHALLA_MOBILE_DEV"].flatMap(Bool.init) ?? false
 
 // Use the local binary
@@ -13,7 +14,7 @@ var binaryTarget: Target = .binaryTarget(
 // CI will replace the nils with the actual values when building a release
 let version: String = "0.5.1"
 let binaryURL: String =
-    "https://github.com/Rallista/valhalla-mobile/releases/download/\(version)/valhalla-wrapper.xcframework.zip"
+    "https://github.com/jakabtomas/valhalla-mobile/releases/download/\(version)/valhalla-wrapper.xcframework.zip"
 let binaryChecksum: String = "0464877f9297ca9462f57c43f5ffa4825c3fed0653300c2de22cd78422d6d560"
 
 if !useLocalBinary {

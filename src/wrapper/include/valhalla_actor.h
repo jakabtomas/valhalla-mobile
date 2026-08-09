@@ -1,6 +1,7 @@
 #ifndef VALHALLAACTOR_H
 #define VALHALLAACTOR_H
 
+#include <memory>
 #include <string>
 #include <valhalla/tyr/actor.h>
 #include <valhalla/baldr/tilegetter.h>
@@ -34,7 +35,9 @@ private:
     std::unique_ptr<valhalla::tyr::actor_t> actor;
     std::unique_ptr<valhalla::baldr::GraphReader> graph_reader;
 public:
-    ValhallaActor(const std::string& config_path, ValhallaMobileHttpClient* http_client = nullptr);
+    ValhallaActor(
+        const std::string& config_path,
+        std::unique_ptr<ValhallaMobileHttpClient> http_client = nullptr);
     
     std::string route(const std::string& request);
 };

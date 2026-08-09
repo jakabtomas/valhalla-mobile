@@ -1,5 +1,7 @@
 package com.valhalla.valhalla
 
+import com.valhalla.valhalla.http.ValhallaHttpClient
+
 internal class ValhallaKotlin {
   companion object {
     init {
@@ -7,5 +9,5 @@ internal class ValhallaKotlin {
     }
   }
 
-  external fun route(request: String, configPath: String): String
+  external fun route(request: String, configPath: String, httpClient: ValhallaHttpClient): String
 }

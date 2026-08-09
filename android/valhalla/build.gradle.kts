@@ -45,7 +45,7 @@ dokka {
     dokkaSourceSets.configureEach {
         sourceLink {
             localDirectory.set(file("src/main/kotlin"))
-            remoteUrl.set(URI("https://github.com/Rallista/valhalla-mobile"))
+            remoteUrl.set(URI("https://github.com/jakabtomas/valhalla-mobile"))
             remoteLineSuffix.set("#L")
         }
 
@@ -95,12 +95,10 @@ archs.forEach { arch ->
     }
 }
 
-tasks.named("preBuild") {
-    // Efficiently build any architecture that doesn't exist in jniLibs.
-    dependsOn("buildValhallaFor-arm64-v8a")
-    dependsOn("buildValhallaFor-armeabi-v7a")
-    dependsOn("buildValhallaFor-x86_64")
-    dependsOn("buildValhallaFor-x86")
+tasks.register("buildValhallaAll") {
+    description = "Build the native Valhalla library for every Android ABI"
+    group = "build"
+    dependsOn(archs.map { "buildValhallaFor-$it" })
 }
 
 mavenPublishing {
@@ -111,19 +109,19 @@ mavenPublishing {
         throw IllegalArgumentException("Version must be specified")
     }
 
-    coordinates("io.github.rallista", "valhalla-mobile", project.version.toString())
+    coordinates("io.github.jakabtomas", "valhalla-mobile", project.version.toString())
 
     configure(AndroidSingleVariantLibrary(sourcesJar = true, publishJavadocJar = true))
 
     pom {
         name.set("Valhalla Mobile")
-        url.set("https://github.com/Rallista/valhalla-mobile")
-        description.set("A mobile app focused wrapper library for the valhalla routing engine")
+        url.set("https://github.com/jakabtomas/valhalla-mobile")
+        description.set("A configurable mobile wrapper for the Valhalla routing engine")
         inceptionYear.set("2024")
         licenses {
             license {
                 name.set("MIT")
-                url.set("https://github.com/Rallista/valhalla-mobile?tab=MIT-1-ov-file#MIT-1-ov-file")
+                url.set("https://github.com/jakabtomas/valhalla-mobile/blob/main/LICENSE.md")
             }
         }
         developers {
@@ -131,6 +129,11 @@ mavenPublishing {
                 name.set("Jacob Fielding")
                 organization.set("Rallista")
                 organizationUrl.set("https://rallista.app")
+            }
+            developer {
+                id.set("jakabtomas")
+                name.set("Tomas Jakab")
+                organizationUrl.set("https://github.com/jakabtomas")
             }
         }
         contributors {
@@ -140,9 +143,9 @@ mavenPublishing {
             }
         }
         scm {
-            connection.set("scm:git:https://github.com/Rallista/valhalla-mobile.git")
-            developerConnection.set("scm:git:ssh://github.com/Rallista/valhalla-mobile.git")
-            url.set("https://github.com/Rallista/valhalla-mobile")
+            connection.set("scm:git:https://github.com/jakabtomas/valhalla-mobile.git")
+            developerConnection.set("scm:git:ssh://github.com/jakabtomas/valhalla-mobile.git")
+            url.set("https://github.com/jakabtomas/valhalla-mobile")
         }
     }
 }

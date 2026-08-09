@@ -40,6 +40,7 @@ fi
 
 export BUILD_DIR=`pwd`/build/android/$android_abi/wrapper
 wrapper_dir=`pwd`/src
+build_jobs=${BUILD_JOBS:-$(getconf _NPROCESSORS_ONLN 2>/dev/null || sysctl -n hw.logicalcpu)}
 
 # Move to the build directory
 mkdir -p $BUILD_DIR && cd $BUILD_DIR
@@ -52,5 +53,4 @@ cmake -DCMAKE_TOOLCHAIN_FILE=$vcpkg_toolchain_file \
     -DANDROID_ABI=$android_abi \
     -S $wrapper_dir \
     -B .
-jobs=$(nproc 2>/dev/null || sysctl -n hw.ncpu)
-cmake --build . --config Release -- -j"$jobs"
+cmake --build . --config Release --parallel "$build_jobs"

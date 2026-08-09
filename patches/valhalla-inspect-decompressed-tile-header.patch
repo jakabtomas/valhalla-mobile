@@ -1,0 +1,40 @@
+diff --git a/src/baldr/graphtile.cc b/src/baldr/graphtile.cc
+index 41f5050df..80973e162 100644
+--- a/src/baldr/graphtile.cc
++++ b/src/baldr/graphtile.cc
+@@ -257,8 +257,24 @@ graph_tile_ptr GraphTile::CacheTileURL(const std::string& tile_url,
+-  // inspect the header for the checksum
+-  // it's a POD type and thus trivially copyable
+-  GraphTileHeader header;
+-  std::memcpy(&header, result.bytes_.data(), sizeof(header));
+-  auto tile_checksum = header.checksum();
++  // A gzipped remote tile must be decompressed before inspecting GraphTileHeader. Reading the
++  // header directly from compressed bytes produces a random checksum and can falsely report that
++  // an immutable remote tar changed.
++  graph_tile_ptr decompressed_tile;
++  uint64_t tile_checksum;
++  if (tile_getter->gzipped()) {
++    decompressed_tile = DecompressTile(graphid, result.bytes_);
++    if (!decompressed_tile || !decompressed_tile->header()) {
++      return nullptr;
++    }
++    tile_checksum = decompressed_tile->header()->checksum();
++  } else {
++    if (result.bytes_.size() < sizeof(GraphTileHeader)) {
++      LOG_ERROR("Remote tile is smaller than GraphTileHeader");
++      return nullptr;
++    }
++    // GraphTileHeader is a POD type and thus trivially copyable.
++    GraphTileHeader header;
++    std::memcpy(&header, result.bytes_.data(), sizeof(header));
++    tile_checksum = header.checksum();
++  }
+   if (tile_checksum == 0) {
+     // loading tilesets built by older valhalla commits has the potential to corrupt the GraphReader
+     LOG_WARN(
+@@ -286,4 +302,4 @@ graph_tile_ptr GraphTile::CacheTileURL(const std::string& tile_url,
+   // turn the memory into a tile
+   if (tile_getter->gzipped()) {
+-    return DecompressTile(graphid, result.bytes_);
++    return decompressed_tile;
+   }
