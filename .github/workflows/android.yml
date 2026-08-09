@@ -34,8 +34,13 @@ jobs:
         id: setup-ndk
         uses: nttld/setup-ndk@v1
         with:
-          ndk-version: 29.0.14206865
+          ndk-version: r29
           add-to-path: false
+
+      - name: Verify Android NDK revision
+        env:
+          ANDROID_NDK_HOME: ${{ steps.setup-ndk.outputs.ndk-path }}
+        run: grep -Fx 'Pkg.Revision = 29.0.14206865' "$ANDROID_NDK_HOME/source.properties"
 
       - name: set up JDK 21
         uses: actions/setup-java@v4
@@ -102,13 +107,6 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Setup Android NDK
-        id: setup-ndk
-        uses: nttld/setup-ndk@v1
-        with:
-          ndk-version: 29.0.14206865
-          add-to-path: false
-
       - name: set up JDK 21
         uses: actions/setup-java@v4
         with:
@@ -124,7 +122,6 @@ jobs:
         env:
           GITHUB_ACTOR: ${{ github.actor }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          ANDROID_NDK_HOME: ${{ steps.setup-ndk.outputs.ndk-path }}
         run: ./gradlew ktfmtCheck
         working-directory: android
 
@@ -150,13 +147,6 @@ jobs:
       - name: Unzip JNI Libs
         run: unzip valhalla-jniLibs.zip
 
-      - name: Setup Android NDK
-        id: setup-ndk
-        uses: nttld/setup-ndk@v1
-        with:
-          ndk-version: 29.0.14206865
-          add-to-path: false
-
       - name: set up JDK 21
         uses: actions/setup-java@v4
         with:
@@ -172,7 +162,6 @@ jobs:
         env:
           GITHUB_ACTOR: ${{ github.actor }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          ANDROID_NDK_HOME: ${{ steps.setup-ndk.outputs.ndk-path }}
         run: ./gradlew test
         working-directory: android
 
@@ -206,13 +195,6 @@ jobs:
       - name: Unzip JNI Libs
         run: unzip valhalla-jniLibs.zip
 
-      - name: Setup Android NDK
-        id: setup-ndk
-        uses: nttld/setup-ndk@v1
-        with:
-          ndk-version: 29.0.14206865
-          add-to-path: false
-
       - name: set up JDK 21
         uses: actions/setup-java@v4
         with:
@@ -235,12 +217,10 @@ jobs:
         env:
           GITHUB_ACTOR: ${{ github.actor }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          ANDROID_NDK_HOME: ${{ steps.setup-ndk.outputs.ndk-path }}
         with:
           api-level: 34
           target: google_apis
           arch: x86_64
-          ndk: 29.0.14206865
           script: ./gradlew connectedCheck
           working-directory: android
 

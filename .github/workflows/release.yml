@@ -164,8 +164,13 @@ jobs:
         id: setup-ndk
         uses: nttld/setup-ndk@v1
         with:
-          ndk-version: ${{ env.ANDROID_NDK_VERSION }}
+          ndk-version: r29
           add-to-path: false
+
+      - name: Verify Android NDK revision
+        env:
+          ANDROID_NDK_HOME: ${{ steps.setup-ndk.outputs.ndk-path }}
+        run: grep -Fx "Pkg.Revision = $ANDROID_NDK_VERSION" "$ANDROID_NDK_HOME/source.properties"
 
       - name: set up JDK 21
         uses: actions/setup-java@v4
