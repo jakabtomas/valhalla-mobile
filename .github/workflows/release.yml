@@ -65,7 +65,7 @@ jobs:
 
       - name: Install pinned vcpkg
         run: |
-          git clone --depth 1 --branch "$VCPKG_VERSION" https://github.com/microsoft/vcpkg
+          git clone --branch "$VCPKG_VERSION" https://github.com/microsoft/vcpkg
           ./vcpkg/bootstrap-vcpkg.sh -disableMetrics
 
       - name: Build native Apple library
@@ -157,7 +157,7 @@ jobs:
 
       - name: Install pinned vcpkg
         run: |
-          git clone --depth 1 --branch "$VCPKG_VERSION" https://github.com/microsoft/vcpkg
+          git clone --branch "$VCPKG_VERSION" https://github.com/microsoft/vcpkg
           ./vcpkg/bootstrap-vcpkg.sh -disableMetrics
 
       - name: Set up Android NDK

@@ -28,7 +28,7 @@ jobs:
 
       - name: Setup VCPKG
         run: |
-          git clone --depth 1 --branch 2025.12.12 https://github.com/microsoft/vcpkg
+          git clone --branch 2025.12.12 https://github.com/microsoft/vcpkg
           ./vcpkg/bootstrap-vcpkg.sh -disableMetrics
 
       - name: Build for iOS & iOS Simulator
