@@ -226,6 +226,28 @@ jobs:
           name: android-x86_64
           path: android/valhalla/src/main/jniLibs/x86_64
 
+      - name: Set up Android NDK
+        id: setup-ndk
+        uses: nttld/setup-ndk@v1
+        with:
+          ndk-version: r29
+          add-to-path: false
+
+      - name: Verify Android NDK revision
+        env:
+          ANDROID_NDK_HOME: ${{ steps.setup-ndk.outputs.ndk-path }}
+        run: grep -Fx "Pkg.Revision = $ANDROID_NDK_VERSION" "$ANDROID_NDK_HOME/source.properties"
+
+      - name: Strip release native libraries
+        env:
+          ANDROID_NDK_HOME: ${{ steps.setup-ndk.outputs.ndk-path }}
+        run: |
+          strip_tool="$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-strip"
+          test -x "$strip_tool"
+          find android/valhalla/src/main/jniLibs \
+            -type f -name 'libvalhalla-wrapper.so' -print0 |
+            xargs -0 -n1 "$strip_tool" --strip-unneeded
+
       - name: Set up JDK 21
         uses: actions/setup-java@v4
         with:
@@ -249,8 +271,11 @@ jobs:
         run: |
           archive="valhalla-mobile-${RELEASE_VERSION}.aar"
           for architecture in arm64-v8a armeabi-v7a x86 x86_64; do
-            unzip -Z1 "$archive" | grep -Fx \
-              "jni/${architecture}/libvalhalla-wrapper.so"
+            entry="jni/${architecture}/libvalhalla-wrapper.so"
+            unzip -Z1 "$archive" | grep -Fx "$entry"
+            size="$(unzip -l "$archive" "$entry" | awk -v entry="$entry" '$4 == entry { print $1 }')"
+            test -n "$size"
+            test "$size" -lt $((50 * 1024 * 1024))
           done
           shasum -a 256 "$archive"
 
