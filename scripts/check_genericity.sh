@@ -29,6 +29,18 @@ if ! git -C src/valhalla diff --quiet; then
     exit 1
 fi
 
+models_version=$(sed -n 's/^valhallaModels = "\([^"]*\)"$/\1/p' android/gradle/libs.versions.toml)
+if [[ -z "$models_version" ]]; then
+    echo "Unable to resolve the Android Valhalla models version."
+    exit 1
+fi
+for artifact in valhalla-models valhalla-models-config; do
+    if ! grep -F "io.github.rallista:$artifact:$models_version" README.md >/dev/null; then
+        echo "README Android dependency $artifact must match version $models_version."
+        exit 1
+    fi
+done
+
 for patch_file in patches/*.patch; do
     git -C src/valhalla apply --check "$(pwd)/$patch_file"
 done

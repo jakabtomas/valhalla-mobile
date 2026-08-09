@@ -49,8 +49,8 @@ Then add the immutable release:
 
 ```kotlin
 implementation("io.github.jakabtomas:valhalla-mobile:0.6.0@aar")
-implementation("io.github.rallista:valhalla-models:0.1.1")
-implementation("io.github.rallista:valhalla-models-config:0.1.1")
+implementation("io.github.rallista:valhalla-models:0.2.0")
+implementation("io.github.rallista:valhalla-models-config:0.2.0")
 ```
 
 ### iOS
