@@ -1,0 +1,21 @@
+name: Generic library boundary
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  boundary:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out sources
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Verify genericity and patch integrity
+        run: ./scripts/check_genericity.sh

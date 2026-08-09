@@ -1,22 +1,31 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
-# Get the zip file of the xcframework from ci
-release_tag=$1
-release_url="https://github.com/Rallista/valhalla-mobile/releases/download/${release_tag}"
-xcframework_zip="valhalla-wrapper.xcframework.zip"
+set -euo pipefail
 
-# Get the checksum of the xcframework file.
-xcframework_checksum=$(shasum -a 256 ${xcframework_zip} | awk '{print $1}')
-artifact_url="${release_url}/${xcframework_zip}"
+release_tag=${1:?"Usage: write_xcframework_spm.sh VERSION [XCFRAMEWORK_ZIP]"}
+xcframework_zip=${2:-valhalla-wrapper.xcframework.zip}
 
-echo "Checksum: ${xcframework_checksum}"
-echo "Release URL: ${artifact_url}"
+if [[ ! "$release_tag" =~ ^[0-9]+\.[0-9]+\.[0-9]+([+-][0-9A-Za-z.-]+)?$ ]]; then
+    echo "Release version is not valid semantic versioning: $release_tag"
+    exit 1
+fi
+if [[ ! -f "$xcframework_zip" ]]; then
+    echo "XCFramework archive does not exist: $xcframework_zip"
+    exit 1
+fi
 
-# Replace `let useLocalBinary = true` line with `let useLocalBinary = false` in Package.swift
-# sed -i '' "s|^let useLocalBinary: Bool = .*|let useLocalBinary: Bool = false|" Package.swift
+xcframework_checksum=$(swift package compute-checksum "$xcframework_zip")
 
-# Replace `let version` line with the new binary url for the release artifact in Package.swift
-sed -i '' "s|^let version: String = .*|let version: String = \"$release_tag\"|" Package.swift
+RELEASE_TAG="$release_tag" \
+XCFRAMEWORK_CHECKSUM="$xcframework_checksum" \
+perl -0pi -e '
+    s/^let version: String = .*$/let version: String = "$ENV{RELEASE_TAG}"/m;
+    s/^let binaryChecksum: String = .*$/let binaryChecksum: String = "$ENV{XCFRAMEWORK_CHECKSUM}"/m;
+' Package.swift
 
-# Replace let binaryChecksum: String? = nil with the new binary checksum for the release artifact in Package.swift
-sed -i '' "s|^let binaryChecksum: String = .*|let binaryChecksum: String = \"$xcframework_checksum\"|" Package.swift
+printf '%s\n' "$release_tag" > version.txt
+
+grep -F "let version: String = \"$release_tag\"" Package.swift >/dev/null
+grep -F "let binaryChecksum: String = \"$xcframework_checksum\"" Package.swift >/dev/null
+
+echo "Prepared release $release_tag with SwiftPM checksum $xcframework_checksum."

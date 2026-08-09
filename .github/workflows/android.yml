@@ -27,15 +27,14 @@ jobs:
 
       - name: Setup VCPKG
         run: |
-          git clone https://github.com/microsoft/vcpkg && git -C vcpkg checkout 2025.10.17
-          ./vcpkg/bootstrap-vcpkg.sh
-          export VCPKG_ROOT=`pwd`/vcpkg
+          git clone --depth 1 --branch 2025.12.12 https://github.com/microsoft/vcpkg
+          ./vcpkg/bootstrap-vcpkg.sh -disableMetrics
 
       - name: Setup Android NDK
         id: setup-ndk
         uses: nttld/setup-ndk@v1
         with:
-          ndk-version: r29
+          ndk-version: 29.0.14206865
           add-to-path: false
 
       - name: set up JDK 21
@@ -107,7 +106,7 @@ jobs:
         id: setup-ndk
         uses: nttld/setup-ndk@v1
         with:
-          ndk-version: r29
+          ndk-version: 29.0.14206865
           add-to-path: false
 
       - name: set up JDK 21
@@ -155,7 +154,7 @@ jobs:
         id: setup-ndk
         uses: nttld/setup-ndk@v1
         with:
-          ndk-version: r29
+          ndk-version: 29.0.14206865
           add-to-path: false
 
       - name: set up JDK 21
@@ -211,7 +210,7 @@ jobs:
         id: setup-ndk
         uses: nttld/setup-ndk@v1
         with:
-          ndk-version: r29
+          ndk-version: 29.0.14206865
           add-to-path: false
 
       - name: set up JDK 21
