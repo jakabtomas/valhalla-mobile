@@ -101,8 +101,11 @@ fallback behavior.
 Fetching submodules
 
 ```sh
-git submodule update --init --recursive
+./scripts/init_source_submodules.sh
 ```
+
+The source submodule is intentionally disabled for normal package consumers. The
+helper explicitly opts in to the native sources required by local source builds.
 
 Set up VCPKG
 

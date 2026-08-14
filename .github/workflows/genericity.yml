@@ -14,8 +14,12 @@ jobs:
     steps:
       - name: Check out sources
         uses: actions/checkout@v4
-        with:
-          submodules: recursive
+
+      - name: Verify binary consumer checkout
+        run: ./scripts/check_binary_consumer_checkout.sh
+
+      - name: Initialize native sources
+        run: ./scripts/init_source_submodules.sh
 
       - name: Verify genericity and patch integrity
         run: ./scripts/check_genericity.sh
