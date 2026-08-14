@@ -22,8 +22,9 @@ jobs:
     steps:
       - name: Checkout Valhalla
         uses: actions/checkout@v4
-        with:
-          submodules: "recursive"
+
+      - name: Initialize native sources
+        run: ./scripts/init_source_submodules.sh
 
       - name: Setup VCPKG
         run: |

@@ -1,3 +1,4 @@
 [submodule "src/valhalla"]
 	path = src/valhalla
 	url = https://github.com/valhalla/valhalla.git
+	update = none
