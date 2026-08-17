@@ -31,4 +31,9 @@ constructor(
   override fun route(request: String): String {
     return valhallaKotlin.route(request, configPath, httpClient)
   }
+
+  /** Run a trace-attributes request against the configured routing graph. */
+  fun traceAttributes(request: String): String {
+    return valhallaKotlin.traceAttributes(request, configPath, httpClient)
+  }
 }

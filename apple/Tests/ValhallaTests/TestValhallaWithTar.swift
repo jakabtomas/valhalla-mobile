@@ -74,4 +74,31 @@ final class TestValhallaWithTar: XCTestCase {
         XCTAssertEqual(response.trip.statusMessage, "Found route between points")
         XCTAssertEqual(response.trip.legs.first?.shape.count, 656)
     }
+
+    func testSuccessfulTraceAttributes() throws {
+        let valhalla = try Valhalla(defaultConfig)
+        let request = """
+        {
+          "shape": [
+            {"lat": 42.5063, "lon": 1.5218},
+            {"lat": 42.5086, "lon": 1.5394}
+          ],
+          "shape_match": "map_snap",
+          "costing": "auto",
+          "filters": {
+            "action": "include",
+            "attributes": ["edge.length", "edge.surface"]
+          }
+        }
+        """
+
+        let response = valhalla.traceAttributes(rawRequest: request)
+        let data = try XCTUnwrap(response.data(using: .utf8))
+        let object = try XCTUnwrap(
+            JSONSerialization.jsonObject(with: data) as? [String: Any]
+        )
+        let edges = try XCTUnwrap(object["edges"] as? [[String: Any]])
+
+        XCTAssertFalse(edges.isEmpty)
+    }
 }
