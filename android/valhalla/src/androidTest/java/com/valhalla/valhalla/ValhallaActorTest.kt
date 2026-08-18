@@ -59,4 +59,15 @@ class ValhallaActorTest {
     assertEquals(0, trip.getInt("status"))
     assertEquals("Found route between points", trip.getString("status_message"))
   }
+
+  @Test
+  fun testSuccessfulTraceAttributes() {
+    val valhalla = ValhallaActor(configPath)
+    val request =
+        """{"shape":[{"lat":42.5063,"lon":1.5218},{"lat":42.5086,"lon":1.5394}],"shape_match":"map_snap","costing":"auto","filters":{"action":"include","attributes":["edge.length","edge.surface"]}}"""
+
+    val response = JSONObject(valhalla.traceAttributes(request))
+
+    assertTrue(response.getJSONArray("edges").length() > 0)
+  }
 }

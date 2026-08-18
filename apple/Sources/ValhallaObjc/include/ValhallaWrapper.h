@@ -48,6 +48,8 @@ NS_SWIFT_NAME(ValhallaObjcHTTPClient)
 
 - (NSString*)route:(NSString*)request;
 
+- (NSString*)traceAttributes:(NSString*)request;
+
 @end
 
 NS_ASSUME_NONNULL_END

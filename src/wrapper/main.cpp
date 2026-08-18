@@ -8,15 +8,14 @@
 #include "android_http_client.h"
 #include <jni.h>
 
-extern "C"
-JNIEXPORT jstring
+using actor_action_t = std::string (ValhallaActor::*)(const std::string&);
 
-JNICALL
-Java_com_valhalla_valhalla_ValhallaKotlin_route(JNIEnv *env,
-                                                jobject thiz,
-                                                jstring jRequest,
-                                                jstring jConfigPath,
-                                                jobject jHttpClient) {
+static jstring execute_android_action(JNIEnv *env,
+                                      jstring jRequest,
+                                      jstring jConfigPath,
+                                      jobject jHttpClient,
+                                      actor_action_t action,
+                                      const char* action_name) {
     if (!jRequest || !jConfigPath || !jHttpClient) {
         const auto error = make_error_json(-1, "Native routing arguments must not be null");
         return env->NewStringUTF(error.c_str());
@@ -45,19 +44,19 @@ Java_com_valhalla_valhalla_ValhallaKotlin_route(JNIEnv *env,
         auto http_client =
             std::make_unique<AndroidHttpClient>(env, jHttpClient, tile_error_state);
         ValhallaActor valhallaActor(config_path, std::move(http_client));
-        result = valhallaActor.route(request);
+        result = (valhallaActor.*action)(request);
     } catch (const valhalla::valhalla_exception_t &err) {
-        printf("[ValhallaActor] route valhalla_exception: %s\n", err.what());
+        printf("[ValhallaActor] %s valhalla_exception: %s\n", action_name, err.what());
         const auto tile_error = tile_error_state->last_error();
         result = tile_error ? make_tile_fetch_error_json(*tile_error)
                             : make_error_json(err.code, err.message);
     } catch (const std::exception &err) {
-        printf("[ValhallaActor] route std::exception: %s\n", err.what());
+        printf("[ValhallaActor] %s std::exception: %s\n", action_name, err.what());
         const auto tile_error = tile_error_state->last_error();
         result = tile_error ? make_tile_fetch_error_json(*tile_error)
                             : make_error_json(-1, err.what());
     } catch (...) {
-        printf("[ValhallaActor] route unknown exception");
+        printf("[ValhallaActor] %s unknown exception", action_name);
         const auto tile_error = tile_error_state->last_error();
         result = tile_error ? make_tile_fetch_error_json(*tile_error)
                             : make_error_json(-1, "unknown exception");
@@ -67,6 +66,33 @@ Java_com_valhalla_valhalla_ValhallaKotlin_route(JNIEnv *env,
     env->ReleaseStringUTFChars(jConfigPath, config_path);
 
     return env->NewStringUTF(result.c_str());
+}
+
+extern "C"
+JNIEXPORT jstring JNICALL
+Java_com_valhalla_valhalla_ValhallaKotlin_route(JNIEnv *env,
+                                                jobject thiz,
+                                                jstring jRequest,
+                                                jstring jConfigPath,
+                                                jobject jHttpClient) {
+    return execute_android_action(
+        env, jRequest, jConfigPath, jHttpClient, &ValhallaActor::route, "route");
+}
+
+extern "C"
+JNIEXPORT jstring JNICALL
+Java_com_valhalla_valhalla_ValhallaKotlin_traceAttributes(JNIEnv *env,
+                                                          jobject thiz,
+                                                          jstring jRequest,
+                                                          jstring jConfigPath,
+                                                          jobject jHttpClient) {
+    return execute_android_action(
+        env,
+        jRequest,
+        jConfigPath,
+        jHttpClient,
+        &ValhallaActor::trace_attributes,
+        "trace_attributes");
 }
 
 #elif __APPLE__
@@ -97,6 +123,24 @@ std::string route(const char *request, void* actor) {
         result = "{\"code\":-1,\"message\":\"unknown exception\"}";
     }
 
+    return result;
+}
+
+std::string trace_attributes(const char *request, void* actor) {
+    std::string result;
+    try {
+        result = ((ValhallaActor*) actor)->trace_attributes(request);
+    } catch (const valhalla::valhalla_exception_t &err) {
+        printf("[ValhallaActor] trace_attributes valhalla_exception: %s\n", err.what());
+        result = "{\"code\":" + std::to_string(err.code) +
+            ",\"message\":\"" + err.message + "\"}";
+    } catch (const std::exception &err) {
+        printf("[ValhallaActor] trace_attributes std::exception: %s\n", err.what());
+        result = "{\"code\":-1,\"message\":\"" + std::string(err.what()) + "\"}";
+    } catch (...) {
+        printf("[ValhallaActor] trace_attributes unknown exception");
+        result = "{\"code\":-1,\"message\":\"unknown exception\"}";
+    }
     return result;
 }
 #endif

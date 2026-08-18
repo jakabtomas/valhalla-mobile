@@ -96,6 +96,20 @@ Provider URLs and Valhalla configuration are consumer data. The library contains
 service endpoint, credentials, cache policy, region catalog, or application-specific
 fallback behavior.
 
+## Reading raw trace attributes
+
+Consumers that need edge metadata not represented by the generated models can send a
+Valhalla `/trace_attributes` JSON request through the same configured graph actor.
+The call returns Valhalla's raw JSON response, including its structured error payloads.
+
+```kotlin
+val response = engine.traceAttributes(requestJson)
+```
+
+```swift
+let response = engine.traceAttributes(rawRequest: requestJSON)
+```
+
 ## Manually building Valhalla C++
 
 Fetching submodules

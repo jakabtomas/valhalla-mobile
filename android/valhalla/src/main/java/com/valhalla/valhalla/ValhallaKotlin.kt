@@ -10,4 +10,10 @@ internal class ValhallaKotlin {
   }
 
   external fun route(request: String, configPath: String, httpClient: ValhallaHttpClient): String
+
+  external fun traceAttributes(
+      request: String,
+      configPath: String,
+      httpClient: ValhallaHttpClient
+  ): String
 }

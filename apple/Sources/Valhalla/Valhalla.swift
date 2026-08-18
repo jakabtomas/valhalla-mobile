@@ -72,6 +72,10 @@ public final class Valhalla: ValhallaProviding {
         actor.route(request)
     }
 
+    public func traceAttributes(rawRequest request: String) -> String {
+        actor.traceAttributes(request)
+    }
+
     private static func prepareTimeZoneData() throws {
         do {
             try ValhallaFileManager.injectTzdataIntoLibrary()
